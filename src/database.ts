@@ -30,6 +30,27 @@ interface PublishRow {
   wordpress_url: string | null;
 }
 
+export interface TrendCacheRow {
+  payload: string;
+  fetchedAt: number;
+}
+
+export interface ApprovalRow {
+  jobId: number;
+  telegramUserId: string;
+  action: string;
+  status: "processing" | "completed";
+  inboxPath: string | null;
+}
+
+export interface TopicDetails {
+  jobId: number;
+  growth: number;
+  score: number;
+  conceptFit: number;
+  risk: "low" | "medium";
+}
+
 export function openDatabase(path = process.env.DATABASE_PATH ?? "./data/app.db"): DatabaseSync {
   if (path !== ":memory:") mkdirSync(dirname(path), { recursive: true });
   const db = new DatabaseSync(path);
@@ -56,8 +77,149 @@ export function openDatabase(path = process.env.DATABASE_PATH ?? "./data/app.db"
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       published_at TEXT
     ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS trend_cache (
+      cache_key TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS job_failures (
+      id INTEGER PRIMARY KEY,
+      job_id INTEGER NOT NULL REFERENCES jobs(id),
+      reason TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS approvals (
+      job_id INTEGER PRIMARY KEY REFERENCES jobs(id),
+      telegram_user_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'processing',
+      inbox_path TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      completed_at TEXT
+    ) STRICT;
+
+    CREATE TABLE IF NOT EXISTS topic_details (
+      job_id INTEGER PRIMARY KEY REFERENCES jobs(id),
+      growth REAL NOT NULL,
+      score REAL NOT NULL,
+      concept_fit REAL NOT NULL,
+      risk TEXT NOT NULL
+    ) STRICT;
   `);
   return db;
+}
+
+export function getJob(db: DatabaseSync, jobId: number): Job | undefined {
+  const row = db.prepare(`
+    SELECT id, blog, keyword, normalized_keyword, run_date, status FROM jobs WHERE id = ?
+  `).get(jobId) as unknown as JobRow | undefined;
+  return row ? mapJob(row) : undefined;
+}
+
+export function hasRecentKeyword(
+  db: DatabaseSync,
+  blog: string,
+  keyword: string,
+  runDate: string,
+  excludeJobId: number,
+): boolean {
+  const row = db.prepare(`
+    SELECT 1 FROM jobs
+    WHERE blog = ? AND normalized_keyword = ? AND run_date < ?
+      AND run_date >= date(?, '-90 days') AND status != 'failed' AND id != ?
+    LIMIT 1
+  `).get(blog, normalizeKeyword(keyword), runDate, runDate, excludeJobId);
+  return row !== undefined;
+}
+
+export function recordJobFailure(db: DatabaseSync, jobId: number, reason: string): void {
+  const job = getJob(db, jobId);
+  if (!job) throw new Error(`job ${jobId} not found`);
+  if (job.status !== "failed") transitionJob(db, jobId, "failed");
+  db.prepare("INSERT INTO job_failures (job_id, reason) VALUES (?, ?)").run(jobId, reason);
+}
+
+export function getTrendCache(db: DatabaseSync, key: string, freshAfter: number): TrendCacheRow | undefined {
+  const row = db.prepare(`
+    SELECT payload, fetched_at FROM trend_cache WHERE cache_key = ? AND fetched_at >= ?
+  `).get(key, freshAfter) as unknown as { payload: string; fetched_at: number } | undefined;
+  return row ? { payload: row.payload, fetchedAt: row.fetched_at } : undefined;
+}
+
+export function putTrendCache(db: DatabaseSync, key: string, payload: string, fetchedAt: number): void {
+  db.prepare(`
+    INSERT INTO trend_cache (cache_key, payload, fetched_at) VALUES (?, ?, ?)
+    ON CONFLICT (cache_key) DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at
+  `).run(key, payload, fetchedAt);
+}
+
+export function claimApproval(
+  db: DatabaseSync,
+  jobId: number,
+  telegramUserId: string,
+  action: string,
+): ApprovalRow {
+  db.prepare(`
+    INSERT INTO approvals (job_id, telegram_user_id, action) VALUES (?, ?, ?)
+    ON CONFLICT (job_id) DO NOTHING
+  `).run(jobId, telegramUserId, action);
+  const row = db.prepare(`
+    SELECT job_id, telegram_user_id, action, status, inbox_path FROM approvals WHERE job_id = ?
+  `).get(jobId) as unknown as {
+    job_id: number;
+    telegram_user_id: string;
+    action: string;
+    status: "processing" | "completed";
+    inbox_path: string | null;
+  };
+  if (row.telegram_user_id !== telegramUserId || row.action !== action) {
+    throw new Error(`job ${jobId} already handled`);
+  }
+  return {
+    jobId: row.job_id,
+    telegramUserId: row.telegram_user_id,
+    action: row.action,
+    status: row.status,
+    inboxPath: row.inbox_path,
+  };
+}
+
+export function completeApproval(db: DatabaseSync, jobId: number, inboxPath: string | null): void {
+  db.prepare(`
+    UPDATE approvals SET status = 'completed', inbox_path = ?, completed_at = CURRENT_TIMESTAMP
+    WHERE job_id = ?
+  `).run(inboxPath, jobId);
+}
+
+export function saveTopicDetails(db: DatabaseSync, details: TopicDetails): void {
+  db.prepare(`
+    INSERT INTO topic_details (job_id, growth, score, concept_fit, risk) VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT (job_id) DO UPDATE SET
+      growth = excluded.growth, score = excluded.score,
+      concept_fit = excluded.concept_fit, risk = excluded.risk
+  `).run(details.jobId, details.growth, details.score, details.conceptFit, details.risk);
+}
+
+export function getTopicDetails(db: DatabaseSync, jobId: number): TopicDetails | undefined {
+  const row = db.prepare(`
+    SELECT job_id, growth, score, concept_fit, risk FROM topic_details WHERE job_id = ?
+  `).get(jobId) as unknown as {
+    job_id: number;
+    growth: number;
+    score: number;
+    concept_fit: number;
+    risk: "low" | "medium";
+  } | undefined;
+  return row ? {
+    jobId: row.job_id,
+    growth: row.growth,
+    score: row.score,
+    conceptFit: row.concept_fit,
+    risk: row.risk,
+  } : undefined;
 }
 
 function mapJob(row: JobRow): Job {

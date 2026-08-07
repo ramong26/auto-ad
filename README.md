@@ -10,11 +10,13 @@ Node.js 24 LTS와 pnpm 10을 사용한다.
 ```bash
 pnpm install
 pnpm start
+pnpm discover
+pnpm bot
 pnpm test
 pnpm typecheck
 ```
 
-환경 변수는 `.env.example`을 `.env`로 복사한 뒤 채운다. `.env`와 `data/`는 Git에 포함하지 않는다.
+환경 변수는 `.env.example`을 `.env`로 복사한 뒤 채운다. `pnpm discover`는 NAVER 후보 3개를 Telegram으로 보내고, `pnpm bot`은 승인 버튼을 받아 `vault/00-inbox`를 만든다. `.env`와 `data/`는 Git에 포함하지 않는다.
 
 ---
 

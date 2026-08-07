@@ -8,7 +8,9 @@
     "node": ">=24 <25"
   },
   "scripts": {
-    "start": "node src/index.ts",
+    "start": "node --env-file-if-exists=.env src/index.ts",
+    "discover": "node --env-file-if-exists=.env src/index.ts discover",
+    "bot": "node --env-file-if-exists=.env src/index.ts bot",
     "test": "node --test src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -17,4 +19,3 @@
     "typescript": "^5.9.0"
   }
 }
-

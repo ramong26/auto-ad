@@ -3,6 +3,19 @@
 작성일: 2026-07-23  
 목표: 검색 데이터 기반 콘텐츠를 효율적으로 제작하고 WordPress에서 Google AdSense 수익 가능성을 검증한다.
 
+## 개발 명령
+
+Node.js 24 LTS와 pnpm 10을 사용한다.
+
+```bash
+pnpm install
+pnpm start
+pnpm test
+pnpm typecheck
+```
+
+환경 변수는 `.env.example`을 `.env`로 복사한 뒤 채운다. `.env`와 `data/`는 Git에 포함하지 않는다.
+
 ---
 
 ## 1. 결론 요약

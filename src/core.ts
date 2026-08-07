@@ -70,6 +70,7 @@ export function createSlug(value: string): string {
     .normalize("NFKD")
     .toLowerCase()
     .replace(/[\u0300-\u036f]/gu, "")
+    .normalize("NFC")
     .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
     .replace(/^-+|-+$/gu, "");
 }
@@ -77,4 +78,3 @@ export function createSlug(value: string): string {
 export function isTelegramOwner(userId: string | number, ownerId: string): boolean {
   return ownerId.trim() !== "" && String(userId) === ownerId.trim();
 }
-

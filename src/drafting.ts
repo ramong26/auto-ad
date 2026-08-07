@@ -6,7 +6,7 @@ import { getJob, hasRecentKeyword, transitionJob } from "./database.ts";
 
 const eligibleStatuses = new Set(["inbox", "revision_requested"]);
 
-function frontMatter(markdown: string): Record<string, string> {
+export function frontMatter(markdown: string): Record<string, string> {
   const block = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u.exec(markdown)?.[1];
   if (!block) throw new Error("Markdown front matter is required");
   return Object.fromEntries(block.split(/\r?\n/u).flatMap((line) => {
@@ -88,21 +88,23 @@ export function finalizeDraft(
   validateDraft(sourceMarkdown, draftMarkdown);
   const metadata = frontMatter(sourceMarkdown);
   const outputPath = resolve(vaultPath, "20-drafts", `${createSlug(metadata.id!)}.md`);
-  if (existsSync(outputPath)) throw new Error(`duplicate draft: ${basename(outputPath)}`);
+  const previousDraft = existsSync(outputPath) ? readFileSync(outputPath, "utf8") : undefined;
+  if (previousDraft && metadata.status !== "revision_requested") throw new Error(`duplicate draft: ${basename(outputPath)}`);
   mkdirSync(dirname(outputPath), { recursive: true });
 
   db.exec("BEGIN IMMEDIATE");
   let wroteDraft = false;
   try {
     moveJobToReview(db, jobId(metadata), metadata);
-    writeFileSync(outputPath, draftMarkdown, { encoding: "utf8", flag: "wx" });
+    writeFileSync(outputPath, draftMarkdown, { encoding: "utf8", flag: previousDraft ? "w" : "wx" });
     wroteDraft = true;
     writeFileSync(inputPath, replaceStatus(sourceMarkdown, "review"), "utf8");
     db.exec("COMMIT");
     return outputPath;
   } catch (error) {
     db.exec("ROLLBACK");
-    if (wroteDraft) unlinkSync(outputPath);
+    if (wroteDraft && previousDraft === undefined) unlinkSync(outputPath);
+    if (previousDraft !== undefined) writeFileSync(outputPath, previousDraft, "utf8");
     writeFileSync(inputPath, sourceMarkdown, "utf8");
     throw error;
   }

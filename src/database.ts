@@ -21,13 +21,20 @@ interface JobRow {
   status: JobStatus;
 }
 
-interface PublishRow {
+export interface Publication {
   id: number;
   job_id: number;
   idempotency_key: string;
-  status: "pending" | "published";
+  status: "pending" | "draft" | "published";
   wordpress_post_id: number | null;
   wordpress_url: string | null;
+  review_token: string | null;
+}
+
+export interface PublicationDecision {
+  jobId: number;
+  telegramUserId: string;
+  decision: "approve" | "revise" | "discard";
 }
 
 export interface TrendCacheRow {
@@ -74,8 +81,18 @@ export function openDatabase(path = process.env.DATABASE_PATH ?? "./data/app.db"
       status TEXT NOT NULL DEFAULT 'pending',
       wordpress_post_id INTEGER UNIQUE,
       wordpress_url TEXT,
+      review_token TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       published_at TEXT
+    ) STRICT;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS publications_job_id_unique ON publications(job_id);
+
+    CREATE TABLE IF NOT EXISTS publication_decisions (
+      job_id INTEGER PRIMARY KEY REFERENCES jobs(id),
+      telegram_user_id TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      decided_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) STRICT;
 
     CREATE TABLE IF NOT EXISTS trend_cache (
@@ -109,6 +126,10 @@ export function openDatabase(path = process.env.DATABASE_PATH ?? "./data/app.db"
       risk TEXT NOT NULL
     ) STRICT;
   `);
+  const publicationColumns = db.prepare("PRAGMA table_info(publications)").all() as unknown as Array<{ name: string }>;
+  if (!publicationColumns.some(({ name }) => name === "review_token")) {
+    db.exec("ALTER TABLE publications ADD COLUMN review_token TEXT");
+  }
   return db;
 }
 
@@ -262,16 +283,69 @@ export function transitionJob(db: DatabaseSync, jobId: number, to: JobStatus): J
   return mapJob({ ...current, status: to });
 }
 
-export function beginPublication(db: DatabaseSync, jobId: number, idempotencyKey: string): PublishRow {
+export function beginPublication(db: DatabaseSync, jobId: number, idempotencyKey: string): Publication {
   if (!idempotencyKey.trim()) throw new Error("idempotency key is required");
   db.prepare(`
     INSERT INTO publications (job_id, idempotency_key) VALUES (?, ?)
     ON CONFLICT (idempotency_key) DO NOTHING
   `).run(jobId, idempotencyKey);
   const row = db.prepare("SELECT * FROM publications WHERE idempotency_key = ?")
-    .get(idempotencyKey) as unknown as PublishRow;
+    .get(idempotencyKey) as unknown as Publication;
   if (row.job_id !== jobId) throw new Error(`idempotency key ${idempotencyKey} belongs to another job`);
   return row;
+}
+
+export function getPublication(db: DatabaseSync, jobId: number): Publication | undefined {
+  return db.prepare("SELECT * FROM publications WHERE job_id = ?").get(jobId) as unknown as Publication | undefined;
+}
+
+export function recordWordPressDraft(
+  db: DatabaseSync,
+  idempotencyKey: string,
+  wordpressPostId: number,
+  editUrl: string,
+  reviewToken: string,
+): Publication {
+  db.prepare(`
+    UPDATE publications SET status = 'draft', wordpress_post_id = ?, wordpress_url = ?, review_token = ?
+    WHERE idempotency_key = ? AND status IN ('pending', 'draft')
+  `).run(wordpressPostId, editUrl, reviewToken, idempotencyKey);
+  const row = db.prepare("SELECT * FROM publications WHERE idempotency_key = ?")
+    .get(idempotencyKey) as unknown as Publication | undefined;
+  if (!row) throw new Error(`publication ${idempotencyKey} not found`);
+  if (row.wordpress_post_id !== wordpressPostId) throw new Error(`publication ${idempotencyKey} already has another post`);
+  return row;
+}
+
+export function invalidatePublicationReview(db: DatabaseSync, jobId: number): void {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    db.prepare("UPDATE publications SET review_token = NULL WHERE job_id = ?").run(jobId);
+    db.prepare("DELETE FROM publication_decisions WHERE job_id = ?").run(jobId);
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+export function claimPublicationDecision(
+  db: DatabaseSync,
+  jobId: number,
+  telegramUserId: string,
+  decision: PublicationDecision["decision"],
+): PublicationDecision {
+  db.prepare(`
+    INSERT INTO publication_decisions (job_id, telegram_user_id, decision) VALUES (?, ?, ?)
+    ON CONFLICT (job_id) DO NOTHING
+  `).run(jobId, telegramUserId, decision);
+  const row = db.prepare(`
+    SELECT job_id, telegram_user_id, decision FROM publication_decisions WHERE job_id = ?
+  `).get(jobId) as unknown as { job_id: number; telegram_user_id: string; decision: PublicationDecision["decision"] };
+  if (row.telegram_user_id !== telegramUserId || row.decision !== decision) {
+    throw new Error(`job ${jobId} already has another publication decision`);
+  }
+  return { jobId: row.job_id, telegramUserId: row.telegram_user_id, decision: row.decision };
 }
 
 export function completePublication(
@@ -279,14 +353,14 @@ export function completePublication(
   idempotencyKey: string,
   wordpressPostId: number,
   wordpressUrl: string,
-): PublishRow {
+): Publication {
   const result = db.prepare(`
     UPDATE publications
     SET status = 'published', wordpress_post_id = ?, wordpress_url = ?, published_at = CURRENT_TIMESTAMP
-    WHERE idempotency_key = ? AND status = 'pending'
+    WHERE idempotency_key = ? AND status IN ('pending', 'draft')
   `).run(wordpressPostId, wordpressUrl, idempotencyKey);
   const row = db.prepare("SELECT * FROM publications WHERE idempotency_key = ?")
-    .get(idempotencyKey) as unknown as PublishRow | undefined;
+    .get(idempotencyKey) as unknown as Publication | undefined;
   if (!row) throw new Error(`publication ${idempotencyKey} not found`);
   if (result.changes === 0 && row.wordpress_post_id !== wordpressPostId) {
     throw new Error(`publication ${idempotencyKey} already completed`);

@@ -46,6 +46,7 @@ test("state transition, slug, and Telegram owner", () => {
   assert.equal(canTransition("candidate", "selected"), true);
   assert.equal(canTransition("candidate", "published"), false);
   assert.equal(createSlug("AI PC: Buying Guide!"), "ai-pc-buying-guide");
+  assert.equal(createSlug("Windows PC 백업 확인법"), "windows-pc-백업-확인법");
   assert.equal(isTelegramOwner(123456789, "123456789"), true);
   assert.equal(isTelegramOwner(123456788, "123456789"), false);
   assert.equal(isTelegramOwner(1, ""), false);

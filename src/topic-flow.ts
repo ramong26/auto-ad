@@ -38,7 +38,7 @@ export interface CallbackResult {
   inboxPath: string | null;
 }
 
-async function callTelegram<T>(
+export async function callTelegram<T>(
   token: string,
   method: string,
   payload: object,
@@ -190,6 +190,7 @@ export async function pollTopicCallbacks(
   ownerId: string,
   vaultPath: string,
   request: typeof fetch = fetch,
+  publicationHandler?: (callback: TelegramCallback) => Promise<string>,
 ): Promise<never> {
   let offset = 0;
   for (;;) {
@@ -203,10 +204,18 @@ export async function pollTopicCallbacks(
       const callback = update.callback_query;
       if (!callback) continue;
       try {
+        if (callback.data?.startsWith("publish:")) {
+          if (!publicationHandler) throw new Error("publication handler is unavailable");
+          await answerTopicCallback(token, callback.id, await publicationHandler(callback), request);
+          continue;
+        }
         const result = handleTopicCallback(db, callback, ownerId, vaultPath);
         await answerTopicCallback(token, callback.id, result.inboxPath ? "inbox에 추가했습니다." : "처리했습니다.", request);
-      } catch {
-        await answerTopicCallback(token, callback.id, "처리할 수 없습니다.", request);
+      } catch (error) {
+        const message = error instanceof Error && error.name === "WordPressAuthError"
+          ? "WordPress 인증 실패: Application Password를 확인하세요."
+          : "처리할 수 없습니다.";
+        await answerTopicCallback(token, callback.id, message, request);
       }
     }
   }

@@ -2,10 +2,27 @@ import { readFileSync } from "node:fs";
 import { openDatabase } from "./database.ts";
 import { discoverCandidates } from "./discovery.ts";
 import { failDraft, finalizeDraft } from "./drafting.ts";
+import { frontMatter } from "./drafting.ts";
+import {
+  handlePublicationCallback,
+  sendDraftReview,
+  stageWordPressDraft,
+  verifyWordPressSetup,
+  type WordPressConfig,
+} from "./publishing.ts";
 import { pollTopicCallbacks, sendCandidateBriefing } from "./topic-flow.ts";
 
 const db = openDatabase();
 const command = process.argv[2];
+
+function wordpressConfig(): WordPressConfig {
+  return {
+    baseUrl: process.env.WP_DIGITAL_URL ?? "",
+    username: process.env.WP_DIGITAL_USERNAME ?? "",
+    applicationPassword: process.env.WP_DIGITAL_APP_PASSWORD ?? "",
+    categoryId: Number(process.env.WP_DIGITAL_CATEGORY_ID ?? "0"),
+  };
+}
 
 if (command === "discover") {
   const seeds = (process.env.SEED_KEYWORDS ?? "").split(",").map((keyword) => keyword.trim()).filter(Boolean)
@@ -35,7 +52,37 @@ if (command === "discover") {
     process.env.TELEGRAM_BOT_TOKEN ?? "",
     process.env.TELEGRAM_OWNER_ID ?? "",
     process.env.VAULT_PATH ?? "./vault",
+    fetch,
+    (callback) => handlePublicationCallback(
+      db,
+      callback,
+      process.env.TELEGRAM_OWNER_ID ?? "",
+      process.env.VAULT_PATH ?? "./vault",
+      wordpressConfig(),
+    ),
   );
+} else if (command === "review") {
+  const draftPath = process.argv[3];
+  if (!draftPath) throw new Error("draft path is required");
+  const markdown = readFileSync(draftPath, "utf8");
+  const metadata = frontMatter(markdown);
+  const match = /-(\d+)$/u.exec(metadata.id ?? "");
+  if (!match) throw new Error("draft id must end with the numeric job ID");
+  const publication = await stageWordPressDraft(db, Number(match[1]), markdown, wordpressConfig());
+  const messageId = await sendDraftReview(
+    process.env.TELEGRAM_BOT_TOKEN ?? "",
+    process.env.TELEGRAM_OWNER_ID ?? "",
+    Number(match[1]),
+    metadata.title ?? "",
+    publication.wordpress_url ?? "",
+    publication.review_token ?? "",
+  );
+  console.log(`sent review message: ${messageId}`);
+  db.close();
+} else if (command === "wordpress-verify") {
+  const result = await verifyWordPressSetup(wordpressConfig());
+  console.log(`WordPress ready: ${result.user} / ${result.category}`);
+  db.close();
 } else if (command === "draft-finalize") {
   const [inboxPath, preparedDraftPath] = process.argv.slice(3);
   if (!inboxPath || !preparedDraftPath) throw new Error("inbox path and prepared draft path are required");

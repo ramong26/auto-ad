@@ -11,6 +11,8 @@
     "start": "node --env-file-if-exists=.env src/index.ts",
     "discover": "node --env-file-if-exists=.env src/index.ts discover",
     "bot": "node --env-file-if-exists=.env src/index.ts bot",
+    "review": "node --env-file-if-exists=.env src/index.ts review",
+    "wordpress:verify": "node --env-file-if-exists=.env src/index.ts wordpress-verify",
     "draft:check": "node --test src/drafting.test.ts",
     "draft:finalize": "node --env-file-if-exists=.env src/index.ts draft-finalize",
     "draft:fail": "node --env-file-if-exists=.env src/index.ts draft-fail",

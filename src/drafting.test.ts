@@ -50,8 +50,12 @@ test("eligible revision request becomes one review draft without publishing", (t
   mkdirSync(join(vault, "20-drafts"));
   const inbox = join(vault, "00-inbox", "job.md");
   writeFileSync(inbox, source(job.id, "revision_requested"));
+  const existingDraft = join(vault, "20-drafts", `2026-08-07-windows-backup-${job.id}.md`);
+  writeFileSync(existingDraft, draft(job.id).replace("백업 상태를 확인합니다.", "이전 초안입니다."));
 
   const output = finalizeDraft(db, vault, inbox, draft(job.id));
+  assert.equal(output, existingDraft);
+  assert.doesNotMatch(readFileSync(output, "utf8"), /이전 초안/u);
   assert.match(readFileSync(output, "utf8"), /status: review/u);
   assert.match(readFileSync(inbox, "utf8"), /status: review/u);
   assert.equal(db.prepare("SELECT status FROM jobs WHERE id = ?").get(job.id)!.status, "review");

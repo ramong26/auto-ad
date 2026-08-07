@@ -14,6 +14,7 @@ pnpm discover
 pnpm bot
 pnpm review -- vault/20-drafts/<초안>.md
 pnpm wordpress:verify
+pnpm site:check
 pnpm mvp:test
 pnpm draft:finalize -- <inbox 경로> <완성본 경로>
 pnpm draft:fail -- <inbox 경로> <사유>
@@ -30,6 +31,8 @@ WordPress 연결 전에는 `WORDPRESS_SETUP.md`를 따른다. `pnpm review`는 W
 ## MVP 운영과 검증
 
 콘텐츠 축적 이후의 정책 페이지, 검색 도구 연결과 AdSense 신청 판정은 [ADSENSE_READINESS.md](./ADSENSE_READINESS.md)에 기록한다.
+
+공개 사이트를 연결한 뒤 `.env`에 `ADSENSE_PUBLISHER_ID`와 `GA_MEASUREMENT_ID`를 설정하고 `pnpm site:check`로 정책 페이지 탐색, viewport, GA4 태그, sitemap, robots.txt, ads.txt를 검사한다.
 
 현재 `.env`가 없으므로 실제 NAVER·Telegram·WordPress 호출은 제외한다. `pnpm mvp:test`는 아래 12단계를 mock REST와 임시 SQLite/Vault로 한 번 연결해 실행하며, `pnpm test`는 제한·timeout·인증 실패를 포함한 전체 실패 경로를 확인한다.
 

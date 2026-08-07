@@ -13,6 +13,7 @@
     "bot": "node --env-file-if-exists=.env src/index.ts bot",
     "review": "node --env-file-if-exists=.env src/index.ts review",
     "wordpress:verify": "node --env-file-if-exists=.env src/index.ts wordpress-verify",
+    "site:check": "node --env-file-if-exists=.env src/site-readiness.ts",
     "mvp:test": "node --test src/mvp.test.ts",
     "draft:check": "node --test src/drafting.test.ts",
     "draft:finalize": "node --env-file-if-exists=.env src/index.ts draft-finalize",

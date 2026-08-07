@@ -98,6 +98,21 @@ export async function sendCandidateBriefing(
   return messageIds;
 }
 
+export async function sendFailureNotice(
+  token: string,
+  ownerId: string,
+  scope: string,
+  reason: string,
+  request: typeof fetch = fetch,
+): Promise<number> {
+  if (!ownerId.trim() || !scope.trim() || !reason.trim()) throw new Error("failure notice fields are required");
+  const message = await callTelegram<TelegramMessage>(token, "sendMessage", {
+    chat_id: ownerId.trim(),
+    text: `[자동화 실패]\n\n구간: ${scope.trim()}\n사유: ${reason.trim()}`,
+  }, request);
+  return message.message_id;
+}
+
 function inboxMarkdown(
   job: NonNullable<ReturnType<typeof getJob>>,
   candidate: TopicDetails,
@@ -191,14 +206,21 @@ export async function pollTopicCallbacks(
   vaultPath: string,
   request: typeof fetch = fetch,
   publicationHandler?: (callback: TelegramCallback) => Promise<string>,
+  failureHandler?: (error: unknown) => void,
 ): Promise<never> {
   let offset = 0;
   for (;;) {
-    const updates = await callTelegram<TelegramUpdate[]>(token, "getUpdates", {
-      offset,
-      timeout: 30,
-      allowed_updates: ["callback_query"],
-    }, request);
+    let updates: TelegramUpdate[];
+    try {
+      updates = await callTelegram<TelegramUpdate[]>(token, "getUpdates", {
+        offset,
+        timeout: 30,
+        allowed_updates: ["callback_query"],
+      }, request);
+    } catch (error) {
+      failureHandler?.(error);
+      throw error;
+    }
     for (const update of updates) {
       offset = update.update_id + 1;
       const callback = update.callback_query;
@@ -212,11 +234,16 @@ export async function pollTopicCallbacks(
         const result = handleTopicCallback(db, callback, ownerId, vaultPath);
         await answerTopicCallback(token, callback.id, result.inboxPath ? "inbox에 추가했습니다." : "처리했습니다.", request);
       } catch (error) {
-        const message = error instanceof Error && error.name === "WordPressAuthError"
-          ? "WordPress 인증 실패: Application Password를 확인하세요."
-          : "처리할 수 없습니다.";
+        failureHandler?.(error);
+        const message = callbackErrorMessage(error);
         await answerTopicCallback(token, callback.id, message, request);
       }
     }
   }
+}
+
+export function callbackErrorMessage(error: unknown): string {
+  return error instanceof Error && error.name === "WordPressAuthError"
+    ? "WordPress 인증 실패: Application Password를 확인하세요."
+    : "처리할 수 없습니다.";
 }

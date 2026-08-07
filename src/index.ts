@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { openDatabase } from "./database.ts";
 import { discoverCandidates } from "./discovery.ts";
-import { failDraft, finalizeDraft } from "./drafting.ts";
-import { frontMatter } from "./drafting.ts";
+import { failDraft, finalizeDraft, frontMatter, recordOperationalFailure } from "./drafting.ts";
 import {
   handlePublicationCallback,
   sendDraftReview,
@@ -10,10 +9,30 @@ import {
   verifyWordPressSetup,
   type WordPressConfig,
 } from "./publishing.ts";
-import { pollTopicCallbacks, sendCandidateBriefing } from "./topic-flow.ts";
+import { pollTopicCallbacks, sendCandidateBriefing, sendFailureNotice } from "./topic-flow.ts";
 
 const db = openDatabase();
 const command = process.argv[2];
+const vaultPath = process.env.VAULT_PATH ?? "./vault";
+
+function recordFailure(scope: string, error: unknown): void {
+  recordOperationalFailure(vaultPath, scope, error instanceof Error ? error.message : String(error));
+}
+
+async function notifyFailure(scope: string, error: unknown): Promise<void> {
+  const reason = error instanceof Error ? error.message : String(error);
+  recordOperationalFailure(vaultPath, scope, reason);
+  try {
+    await sendFailureNotice(
+      process.env.TELEGRAM_BOT_TOKEN ?? "",
+      process.env.TELEGRAM_OWNER_ID ?? "",
+      scope,
+      reason,
+    );
+  } catch (noticeError) {
+    recordFailure("telegram-failure-notice", noticeError);
+  }
+}
 
 function wordpressConfig(): WordPressConfig {
   return {
@@ -36,14 +55,23 @@ if (command === "discover") {
     seeds,
     { keyId: process.env.NAVER_API_KEY_ID ?? "", key: process.env.NAVER_API_KEY ?? "" },
   );
+  if (result.failures.length > 0) {
+    await notifyFailure("discovery", result.failures.map(({ keyword, reason }) => `${keyword}: ${reason}`).join("; "));
+  }
   if (result.candidates.length !== 3) {
     throw new Error(`only ${result.candidates.length} candidates available; ${result.failures.length} failed`);
   }
-  const messageIds = await sendCandidateBriefing(
-    process.env.TELEGRAM_BOT_TOKEN ?? "",
-    process.env.TELEGRAM_OWNER_ID ?? "",
-    result.candidates,
-  );
+  let messageIds: number[];
+  try {
+    messageIds = await sendCandidateBriefing(
+      process.env.TELEGRAM_BOT_TOKEN ?? "",
+      process.env.TELEGRAM_OWNER_ID ?? "",
+      result.candidates,
+    );
+  } catch (error) {
+    await notifyFailure("telegram-candidates", error);
+    throw error;
+  }
   console.log(`sent candidate messages: ${messageIds.join(", ")}`);
   db.close();
 } else if (command === "bot") {
@@ -51,15 +79,16 @@ if (command === "discover") {
     db,
     process.env.TELEGRAM_BOT_TOKEN ?? "",
     process.env.TELEGRAM_OWNER_ID ?? "",
-    process.env.VAULT_PATH ?? "./vault",
+    vaultPath,
     fetch,
     (callback) => handlePublicationCallback(
       db,
       callback,
       process.env.TELEGRAM_OWNER_ID ?? "",
-      process.env.VAULT_PATH ?? "./vault",
+      vaultPath,
       wordpressConfig(),
     ),
+    (error) => recordFailure("bot-callback", error),
   );
 } else if (command === "review") {
   const draftPath = process.argv[3];
@@ -68,15 +97,21 @@ if (command === "discover") {
   const metadata = frontMatter(markdown);
   const match = /-(\d+)$/u.exec(metadata.id ?? "");
   if (!match) throw new Error("draft id must end with the numeric job ID");
-  const publication = await stageWordPressDraft(db, Number(match[1]), markdown, wordpressConfig());
-  const messageId = await sendDraftReview(
-    process.env.TELEGRAM_BOT_TOKEN ?? "",
-    process.env.TELEGRAM_OWNER_ID ?? "",
-    Number(match[1]),
-    metadata.title ?? "",
-    publication.wordpress_url ?? "",
-    publication.review_token ?? "",
-  );
+  let messageId: number;
+  try {
+    const publication = await stageWordPressDraft(db, Number(match[1]), markdown, wordpressConfig());
+    messageId = await sendDraftReview(
+      process.env.TELEGRAM_BOT_TOKEN ?? "",
+      process.env.TELEGRAM_OWNER_ID ?? "",
+      Number(match[1]),
+      metadata.title ?? "",
+      publication.wordpress_url ?? "",
+      publication.review_token ?? "",
+    );
+  } catch (error) {
+    await notifyFailure("draft-review", error);
+    throw error;
+  }
   console.log(`sent review message: ${messageId}`);
   db.close();
 } else if (command === "wordpress-verify") {
@@ -86,12 +121,23 @@ if (command === "discover") {
 } else if (command === "draft-finalize") {
   const [inboxPath, preparedDraftPath] = process.argv.slice(3);
   if (!inboxPath || !preparedDraftPath) throw new Error("inbox path and prepared draft path are required");
-  console.log(finalizeDraft(db, process.env.VAULT_PATH ?? "./vault", inboxPath, readFileSync(preparedDraftPath, "utf8")));
+  console.log(finalizeDraft(db, vaultPath, inboxPath, readFileSync(preparedDraftPath, "utf8")));
   db.close();
 } else if (command === "draft-fail") {
   const [inboxPath, ...reasonParts] = process.argv.slice(3);
   if (!inboxPath || reasonParts.length === 0) throw new Error("inbox path and failure reason are required");
-  console.log(failDraft(db, process.env.VAULT_PATH ?? "./vault", inboxPath, reasonParts.join(" ")));
+  const reason = reasonParts.join(" ");
+  console.log(failDraft(db, vaultPath, inboxPath, reason));
+  try {
+    await sendFailureNotice(
+      process.env.TELEGRAM_BOT_TOKEN ?? "",
+      process.env.TELEGRAM_OWNER_ID ?? "",
+      "codex-draft",
+      reason,
+    );
+  } catch (error) {
+    recordFailure("telegram-failure-notice", error);
+  }
   db.close();
 } else {
   console.log(`auto-ad database ready: ${process.env.DATABASE_PATH ?? "./data/app.db"}`);

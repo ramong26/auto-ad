@@ -14,6 +14,7 @@ pnpm discover
 pnpm bot
 pnpm review -- vault/20-drafts/<초안>.md
 pnpm wordpress:verify
+pnpm mvp:test
 pnpm draft:finalize -- <inbox 경로> <완성본 경로>
 pnpm draft:fail -- <inbox 경로> <사유>
 pnpm test
@@ -25,6 +26,42 @@ Codex 예약 작업은 데스크톱 앱의 **Scheduled**에서 이 프로젝트�
 WordPress 연결 전에는 `WORDPRESS_SETUP.md`를 따른다. `pnpm review`는 WordPress에 비공개 draft를 만들고 Telegram 검토 버튼을 보낼 뿐이며, 공개 발행은 소유자의 **발행 승인** 콜백 뒤에만 실행된다.
 
 환경 변수는 `.env.example`을 `.env`로 복사한 뒤 채운다. `pnpm discover`는 NAVER 후보 3개를 Telegram으로 보내고, `pnpm bot`은 승인 버튼을 받아 `vault/00-inbox`를 만든다. `.env`와 `data/`는 Git에 포함하지 않는다.
+
+## MVP 운영과 검증
+
+현재 `.env`가 없으므로 실제 NAVER·Telegram·WordPress 호출은 제외한다. `pnpm mvp:test`는 아래 12단계를 mock REST와 임시 SQLite/Vault로 한 번 연결해 실행하며, `pnpm test`는 제한·timeout·인증 실패를 포함한 전체 실패 경로를 확인한다.
+
+1. 오전 예약 작업 실행
+2. NAVER 데이터로 후보 3개 생성
+3. Telegram으로 후보 수신
+4. 사용자가 하나 승인
+5. Obsidian inbox 생성
+6. Codex가 초안 작성
+7. Telegram으로 초안 알림
+8. 사용자가 발행 승인
+9. WordPress publish 생성
+10. 발행 URL·시각·상태 기록
+11. 같은 승인 재실행 시 중복 발행 없음
+12. 실패 원인을 Telegram과 `vault/90-failed`에 기록
+
+### 운영 순서
+
+1. `pnpm discover`로 후보를 만들고 Telegram 전송 결과를 확인한다.
+2. `pnpm bot`을 계속 실행해 주제·발행 callback을 한 프로세스에서 받는다.
+3. Codex 예약 작업은 `CODEX_DRAFTING.md`를 사용한다.
+4. 초안이 `review`가 되면 `pnpm review -- vault/20-drafts/<초안>.md`를 실행한다.
+5. Telegram에서 WordPress 비공개 초안을 확인하고 발행 여부를 결정한다.
+6. 실패는 `vault/90-failed`와 SQLite `job_failures`를 먼저 확인한다. Telegram 자체 장애도 Vault 운영 로그에 남는다.
+
+### 백업과 복원
+
+백업 전 `pnpm bot`과 Codex 예약 작업을 중지한다. `data/` 전체와 `vault/` 전체를 같은 시점의 백업 폴더로 복사한다. `.env`는 Git이나 Vault에 넣지 말고 암호화된 비밀 저장소에 별도로 보관한다. WordPress는 호스팅의 데이터베이스·`wp-content` 백업도 함께 사용한다.
+
+복원할 때도 프로세스를 중지하고 현재 `data/`와 `vault/`를 별도 보관한 뒤, 같은 백업 시점의 두 폴더를 함께 복원한다. 복원 후 `pnpm test`, `pnpm typecheck`, 작업 상태와 최근 발행 URL을 확인한 다음 bot을 다시 시작한다.
+
+### Application Password 폐기와 재발급
+
+WordPress의 **사용자 → 프로필 → Application Passwords**에서 `auto-ad` 암호를 폐기한다. 같은 전용 Author 계정에서 새 `auto-ad` 암호를 생성해 `.env`의 `WP_DIGITAL_APP_PASSWORD`만 교체하고 bot을 재시작한다. 실제 연결 환경에서는 `pnpm wordpress:verify`가 통과한 뒤에만 다시 검토·발행한다. 메인 로그인 비밀번호나 관리자 계정을 자동화에 사용하지 않는다.
 
 ---
 

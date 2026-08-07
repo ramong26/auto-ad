@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, dirname, relative, resolve } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { createSlug } from "./core.ts";
@@ -151,4 +151,20 @@ export function failDraft(
     writeFileSync(inputPath, sourceMarkdown, "utf8");
     throw error;
   }
+}
+
+export function recordOperationalFailure(
+  vaultPath: string,
+  scope: string,
+  reason: string,
+  createdAt = new Date().toISOString(),
+): string {
+  if (!scope.trim() || !reason.trim()) throw new Error("failure scope and reason are required");
+  const directory = resolve(vaultPath, "90-failed");
+  mkdirSync(directory, { recursive: true });
+  const path = resolve(directory, `operations-${createdAt.slice(0, 10)}.md`);
+  // ponytail: one local bot appends; use per-process logs if multiple workers are introduced.
+  if (!existsSync(path)) writeFileSync(path, `# 운영 실패 ${createdAt.slice(0, 10)}\n\n`, { encoding: "utf8", flag: "wx" });
+  appendFileSync(path, `- ${createdAt} [${scope.trim()}] ${reason.trim().replace(/\r?\n/gu, " ")}\n`, "utf8");
+  return path;
 }

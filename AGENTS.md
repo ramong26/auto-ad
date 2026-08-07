@@ -7,6 +7,7 @@
 - 상태 변경과 발행은 `src/database.ts`의 함수를 통해 처리한다.
 - 변경 후 `pnpm test`와 `pnpm typecheck`를 실행한다.
 - 실제 Telegram, NAVER, WordPress API는 단위 테스트에서 호출하지 않는다.
+- Search Ads·Daum·관리 화면·OpenAI API·Hermes는 주간 보고서에 실제 병목이 기록되기 전에는 추가하지 않는다.
 
 ## Codex 초안 작업
 

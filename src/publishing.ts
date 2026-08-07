@@ -11,6 +11,7 @@ import {
   getPublication,
   invalidatePublicationReview,
   recordJobFailure,
+  recordPublishAttempt,
   recordWordPressDraft,
   transitionJob,
   type Publication,
@@ -262,38 +263,36 @@ async function publishApproved(
   if (job.status === "approved") job = transitionJob(db, jobId, "publishing");
   if (job.status !== "publishing") throw new Error("publication requires explicit approval");
   const slug = publication.idempotency_key.split("/").at(-1)!;
-  let post: WordPressPost;
   try {
-    post = await wpJson(config, `posts/${publication.wordpress_post_id}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: "publish" }),
-    }, request);
-  } catch (error) {
-    if (error instanceof WordPressAuthError) {
-      transitionJob(db, jobId, "approved");
+    let post: WordPressPost;
+    try {
+      post = await wpJson(config, `posts/${publication.wordpress_post_id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "publish" }),
+      }, request);
+    } catch (error) {
+      if (error instanceof WordPressAuthError) throw error;
+      const recovered = await findPostBySlug(config, slug, request);
+      if (!recovered || recovered.id !== publication.wordpress_post_id || recovered.status !== "publish") throw error;
+      post = recovered;
+    }
+    if (post.status !== "publish" || !post.link) throw new Error("WordPress post was not published");
+    const publishedAt = post.date_gmt ? `${post.date_gmt.replace(/Z$/u, "")}Z` : new Date().toISOString();
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const completed = completePublication(db, publication.idempotency_key, post.id, post.link);
+      transitionJob(db, jobId, "published");
+      recordPublishAttempt(db, jobId, "success");
+      db.exec("COMMIT");
+      return { publication: completed, publishedAt };
+    } catch (error) {
+      db.exec("ROLLBACK");
       throw error;
     }
-    const recovered = await findPostBySlug(config, slug, request);
-    if (!recovered || recovered.id !== publication.wordpress_post_id || recovered.status !== "publish") {
-      transitionJob(db, jobId, "approved");
-      throw error;
-    }
-    post = recovered;
-  }
-  if (post.status !== "publish" || !post.link) {
-    transitionJob(db, jobId, "approved");
-    throw new Error("WordPress post was not published");
-  }
-  const publishedAt = post.date_gmt ? `${post.date_gmt.replace(/Z$/u, "")}Z` : new Date().toISOString();
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    const completed = completePublication(db, publication.idempotency_key, post.id, post.link);
-    transitionJob(db, jobId, "published");
-    db.exec("COMMIT");
-    return { publication: completed, publishedAt };
   } catch (error) {
-    db.exec("ROLLBACK");
+    if (getJob(db, jobId)?.status === "publishing") transitionJob(db, jobId, "approved");
+    recordPublishAttempt(db, jobId, "failure", error);
     throw error;
   }
 }

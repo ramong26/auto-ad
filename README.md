@@ -15,6 +15,7 @@ pnpm bot
 pnpm review -- vault/20-drafts/<초안>.md
 pnpm wordpress:verify
 pnpm site:check
+pnpm report:weekly -- weekly-metrics.json
 pnpm mvp:test
 pnpm draft:finalize -- <inbox 경로> <완성본 경로>
 pnpm draft:fail -- <inbox 경로> <사유>
@@ -1559,6 +1560,8 @@ AdSense 신청 시점은 글 개수만으로 결정하지 않는다.
 ## Phase 12. 성과 피드백
 
 예상 기간: 지속
+
+매주 `weekly-metrics.example.json`을 복사해 Search Console·Analytics·AdSense·비용 값을 입력하고 `pnpm report:weekly -- <지표 JSON>`을 실행한다. 원본 지표와 보고서는 `vault/metrics/YYYY-MM-DD.{json,md}`에 함께 저장되며 같은 주를 덮어쓰지 않는다. 발행 수·실패·WordPress 성공률은 SQLite에서 합산하고 CTR은 클릭과 노출로 계산한다.
 
 수집할 지표:
 

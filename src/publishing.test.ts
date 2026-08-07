@@ -130,6 +130,9 @@ test("only owner approval publishes once and records URL in SQLite and Vault", a
     wp,
   );
   assert.equal(calls.filter(({ body }) => body.includes('"status":"publish"')).length, 1);
+  const attempt = db.prepare("SELECT status, COUNT(*) count FROM publish_attempts GROUP BY status").get()!;
+  assert.equal(attempt.status, "success");
+  assert.equal(attempt.count, 1);
 });
 
 test("Telegram review has link and three owner decisions; media uses REST upload", async () => {
@@ -181,6 +184,7 @@ test("publish timeout recovers by slug; authentication failure stops immediately
     recover,
   ), /recovered/u);
   assert.equal(timeoutCase.db.prepare("SELECT count(*) AS count FROM publications").get()!.count, 1);
+  assert.equal(timeoutCase.db.prepare("SELECT status FROM publish_attempts").get()!.status, "success");
 
   const authCase = reviewJob();
   const authVault = vault(authCase.job.id);
@@ -208,6 +212,7 @@ test("publish timeout recovers by slug; authentication failure stops immediately
   assert.equal(publishCalls, 1);
   assert.equal(authCase.db.prepare("SELECT status FROM jobs WHERE id = ?").get(authCase.job.id)!.status, "approved");
   assert.equal(getPublication(authCase.db, authCase.job.id)!.status, "draft");
+  assert.equal(authCase.db.prepare("SELECT status FROM publish_attempts").get()!.status, "failure");
 });
 
 test("WordPress refuses non-HTTPS configuration", async () => {

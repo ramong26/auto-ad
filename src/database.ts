@@ -108,6 +108,16 @@ export function openDatabase(path = process.env.DATABASE_PATH ?? "./data/app.db"
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) STRICT;
 
+    CREATE TABLE IF NOT EXISTS publish_attempts (
+      id INTEGER PRIMARY KEY,
+      job_id INTEGER NOT NULL REFERENCES jobs(id),
+      attempt INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('success', 'failure')),
+      error_message TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (job_id, attempt)
+    ) STRICT;
+
     CREATE TABLE IF NOT EXISTS approvals (
       job_id INTEGER PRIMARY KEY REFERENCES jobs(id),
       telegram_user_id TEXT NOT NULL,
@@ -161,6 +171,18 @@ export function recordJobFailure(db: DatabaseSync, jobId: number, reason: string
   if (!job) throw new Error(`job ${jobId} not found`);
   if (job.status !== "failed") transitionJob(db, jobId, "failed");
   db.prepare("INSERT INTO job_failures (job_id, reason) VALUES (?, ?)").run(jobId, reason);
+}
+
+export function recordPublishAttempt(
+  db: DatabaseSync,
+  jobId: number,
+  status: "success" | "failure",
+  error?: unknown,
+): void {
+  db.prepare(`
+    INSERT INTO publish_attempts (job_id, attempt, status, error_message)
+    SELECT ?, COALESCE(MAX(attempt), 0) + 1, ?, ? FROM publish_attempts WHERE job_id = ?
+  `).run(jobId, status, error === undefined ? null : error instanceof Error ? error.message : String(error), jobId);
 }
 
 export function getTrendCache(db: DatabaseSync, key: string, freshAfter: number): TrendCacheRow | undefined {

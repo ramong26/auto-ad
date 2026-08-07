@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
 import { openDatabase } from "./database.ts";
 import { discoverCandidates } from "./discovery.ts";
+import { failDraft, finalizeDraft } from "./drafting.ts";
 import { pollTopicCallbacks, sendCandidateBriefing } from "./topic-flow.ts";
 
 const db = openDatabase();
@@ -34,6 +36,16 @@ if (command === "discover") {
     process.env.TELEGRAM_OWNER_ID ?? "",
     process.env.VAULT_PATH ?? "./vault",
   );
+} else if (command === "draft-finalize") {
+  const [inboxPath, preparedDraftPath] = process.argv.slice(3);
+  if (!inboxPath || !preparedDraftPath) throw new Error("inbox path and prepared draft path are required");
+  console.log(finalizeDraft(db, process.env.VAULT_PATH ?? "./vault", inboxPath, readFileSync(preparedDraftPath, "utf8")));
+  db.close();
+} else if (command === "draft-fail") {
+  const [inboxPath, ...reasonParts] = process.argv.slice(3);
+  if (!inboxPath || reasonParts.length === 0) throw new Error("inbox path and failure reason are required");
+  console.log(failDraft(db, process.env.VAULT_PATH ?? "./vault", inboxPath, reasonParts.join(" ")));
+  db.close();
 } else {
   console.log(`auto-ad database ready: ${process.env.DATABASE_PATH ?? "./data/app.db"}`);
   db.close();

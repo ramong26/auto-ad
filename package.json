@@ -11,6 +11,9 @@
     "start": "node --env-file-if-exists=.env src/index.ts",
     "discover": "node --env-file-if-exists=.env src/index.ts discover",
     "bot": "node --env-file-if-exists=.env src/index.ts bot",
+    "draft:check": "node --test src/drafting.test.ts",
+    "draft:finalize": "node --env-file-if-exists=.env src/index.ts draft-finalize",
+    "draft:fail": "node --env-file-if-exists=.env src/index.ts draft-fail",
     "test": "node --test src/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

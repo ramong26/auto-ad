@@ -12,9 +12,13 @@ pnpm install
 pnpm start
 pnpm discover
 pnpm bot
+pnpm draft:finalize -- <inbox 경로> <완성본 경로>
+pnpm draft:fail -- <inbox 경로> <사유>
 pnpm test
 pnpm typecheck
 ```
+
+Codex 예약 작업은 데스크톱 앱의 **Scheduled**에서 이 프로젝트를 로컬 모드로 선택하고 `CODEX_DRAFTING.md`의 내용을 프롬프트로 사용한다. 컴퓨터와 앱이 실행 중이어야 로컬 Vault를 처리할 수 있다.
 
 환경 변수는 `.env.example`을 `.env`로 복사한 뒤 채운다. `pnpm discover`는 NAVER 후보 3개를 Telegram으로 보내고, `pnpm bot`은 승인 버튼을 받아 `vault/00-inbox`를 만든다. `.env`와 `data/`는 Git에 포함하지 않는다.
 

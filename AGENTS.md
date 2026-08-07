@@ -8,3 +8,9 @@
 - 변경 후 `pnpm test`와 `pnpm typecheck`를 실행한다.
 - 실제 Telegram, NAVER, WordPress API는 단위 테스트에서 호출하지 않는다.
 
+## Codex 초안 작업
+
+- `CODEX_DRAFTING.md` 절차를 따른다.
+- `vault/00-inbox`에서 `inbox`, `revision_requested` 상태만 처리한다.
+- 성공은 `pnpm draft:finalize -- <inbox 경로> <완성본 경로>`, 실패는 `pnpm draft:fail -- <inbox 경로> <사유>`로 기록한다.
+- 이 단계에서는 WordPress에 발행하지 않는다.

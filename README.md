@@ -40,6 +40,14 @@ TypeScript 키워드 수집
 
 초기 성공이 확인된 다음에만 WordPress와 네이버 블로그를 늘린다.
 
+### 현재 실행 결정
+
+- 수익형 WordPress 사이트 1개로 시작한다.
+- 2026-09-06까지의 목표는 광고 수익이 아니라 자동화 MVP 완성이다.
+- AdSense 신청과 수익 검증은 실제 콘텐츠를 축적한 뒤 별도 운영 단계에서 진행한다.
+- 첫 달에는 NAVER Search Trend 한 가지와 사람이 작성한 seed keyword를 사용한다.
+- Search Ads, 다음 이슈 수집, 다중 사이트, 별도 대시보드는 MVP 이후로 미룬다.
+
 ---
 
 ## 2. 프로젝트 목표
@@ -1164,6 +1172,36 @@ Hermes 자체 설치는 오픈소스이지만 추론과 클라우드 비용은 �
 
 ## 21. 단계별 개발 계획
 
+### 한 달 MVP 범위
+
+목표 기간: 2026-08-10 ~ 2026-09-06
+
+첫 주에는 계정과 운영 환경을 준비하고, 이후 자동화 구현과 전체 흐름 검증을 진행한다.
+
+MVP 포함:
+
+- 첫 블로그 콘셉트와 금지 주제
+- 비공개 TypeScript 저장소
+- SQLite 작업 상태와 중복 방지
+- NAVER Search Trend 기반 후보 생성
+- Telegram 후보 승인
+- Obsidian inbox와 drafts
+- Codex 예약 초안 작성
+- Telegram 발행 승인
+- WordPress draft 생성과 발행 URL 기록
+- 실패 사유 기록과 재실행 안전성
+
+MVP 제외:
+
+- Search Ads와 다음 이슈 수집
+- 네이버 블로그
+- 여러 WordPress 사이트
+- 별도 프론트엔드
+- 자동 품질 평가 에이전트
+- AdSense 승인과 수익 달성
+
+한 달 MVP는 아래 Phase 0~3, 6~10의 최소 기능만 구현한다. Phase 4~5와 고급 품질 자동화는 운영 데이터가 생긴 뒤 진행한다.
+
 ## Phase 0. 사업 및 콘텐츠 정의
 
 예상 기간: 1~2일
@@ -1618,10 +1656,14 @@ API 사용량
 
 ## 25. 12주 실행 일정
 
+첫 4주는 자동화 MVP, 이후 8주는 콘텐츠 운영과 수익 가능성 검증이다. 개발 완료일과 AdSense 성과 확인일을 같은 마감으로 취급하지 않는다.
+
 ### 1주차
 
 - 콘셉트 확정
 - 도메인 검토
+- WordPress 호스팅과 Telegram Bot 준비
+- NAVER API HUB 신청
 - GitHub 저장소
 - TypeScript 프로젝트
 - SQLite
@@ -1629,33 +1671,32 @@ API 사용량
 
 ### 2주차
 
-- NAVER API HUB
 - Search Trend
-- 뉴스 검색
 - 캐시
 - 기본 점수
+- Telegram 후보 메시지와 승인
+- Obsidian inbox 생성
 
 ### 3주차
 
-- Telegram
-- Obsidian inbox
 - Codex 예약 작업
 - 초안 작성
+- WordPress REST API 연결
+- draft 생성
+- 발행 승인
 
 ### 4주차
 
-- WordPress 설치
-- REST API
-- draft 발행
-- Telegram 승인
 - 중복 방지
+- 실패 복구
+- 전체 시나리오 검증
+- 첫 실제 글 발행
+- 운영 문서 정리
 
 ### 5~6주차
 
-- 다음 이슈 보조 수집
-- Search Ads
+- 필요할 때만 다음 이슈와 Search Ads 검토
 - 출처 검사 강화
-- 첫 실제 글 발행
 - 주 3~5개 운영
 
 ### 7~8주차

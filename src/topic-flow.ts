@@ -15,6 +15,7 @@ import type { TopicCandidate } from "./discovery.ts";
 interface TelegramResponse<T> {
   ok: boolean;
   result?: T;
+  description?: string;
 }
 
 interface TelegramMessage {
@@ -30,6 +31,11 @@ export interface TelegramCallback {
 interface TelegramUpdate {
   update_id: number;
   callback_query?: TelegramCallback;
+  message?: {
+    text?: string;
+    from?: { id: number; is_bot?: boolean };
+    chat?: { type?: string };
+  };
 }
 
 export interface CallbackResult {
@@ -57,7 +63,7 @@ export async function callTelegram<T>(
     throw new Error(`Telegram ${method} returned invalid JSON`);
   }
   if (!response.ok || !body.ok || body.result === undefined) {
-    throw new Error(`Telegram ${method} failed with ${response.status}`);
+    throw new Error(`Telegram ${method} failed with ${response.status}${body.description ? `: ${body.description}` : ""}`);
   }
   return body.result;
 }
@@ -113,6 +119,44 @@ export async function sendFailureNotice(
   return message.message_id;
 }
 
+export async function sendDraftReviewNotice(
+  token: string,
+  ownerId: string,
+  draftPath: string,
+  title: string,
+  summary: string,
+  request: typeof fetch = fetch,
+): Promise<number> {
+  if (!ownerId.trim() || !draftPath.trim() || !title.trim() || !summary.trim()) {
+    throw new Error("draft review notice fields are required");
+  }
+  const message = await callTelegram<TelegramMessage>(token, "sendMessage", {
+    chat_id: ownerId.trim(),
+    text: [
+      "[네이버 블로그 원고 작성 완료]",
+      "",
+      `제목: ${title.trim()}`,
+      `요약: ${summary.trim()}`,
+      `파일: ${draftPath}`,
+      "",
+      "네이버 블로그 에디터에 직접 붙여넣고 최종 확인 후 발행하세요.",
+    ].join("\n"),
+  }, request);
+  return message.message_id;
+}
+
+export async function findTelegramOwnerId(token: string, request: typeof fetch = fetch): Promise<string> {
+  const updates = await callTelegram<TelegramUpdate[]>(token, "getUpdates", {
+    limit: 100,
+    timeout: 30,
+    allowed_updates: ["message"],
+  }, request);
+  const owner = updates.findLast(({ message }) =>
+    message?.chat?.type === "private" && message.from?.is_bot !== true && Boolean(message.text?.trim()));
+  if (!owner?.message?.from) throw new Error("Send a private message to the Telegram bot first");
+  return String(owner.message.from.id);
+}
+
 function inboxMarkdown(
   job: NonNullable<ReturnType<typeof getJob>>,
   candidate: TopicDetails,
@@ -141,7 +185,8 @@ function inboxMarkdown(
     "",
     "- 블로그 persona와 금지 주제를 확인한다.",
     "- 공식 출처와 확인 날짜를 남긴다.",
-    "- 사용자 승인 전에는 발행하지 않는다.",
+    "- 네이버 블로그용 원고를 작성한다.",
+    "- 네이버 블로그에는 자동으로 게시하지 않는다.",
     "",
   ].join("\n");
 }
@@ -205,7 +250,6 @@ export async function pollTopicCallbacks(
   ownerId: string,
   vaultPath: string,
   request: typeof fetch = fetch,
-  publicationHandler?: (callback: TelegramCallback) => Promise<string>,
   failureHandler?: (error: unknown) => void,
 ): Promise<never> {
   let offset = 0;
@@ -226,17 +270,20 @@ export async function pollTopicCallbacks(
       const callback = update.callback_query;
       if (!callback) continue;
       try {
-        if (callback.data?.startsWith("publish:")) {
-          if (!publicationHandler) throw new Error("publication handler is unavailable");
-          await answerTopicCallback(token, callback.id, await publicationHandler(callback), request);
-          continue;
-        }
         const result = handleTopicCallback(db, callback, ownerId, vaultPath);
-        await answerTopicCallback(token, callback.id, result.inboxPath ? "inbox에 추가했습니다." : "처리했습니다.", request);
+        try {
+          await answerTopicCallback(token, callback.id, result.inboxPath ? "inbox에 추가했습니다." : "처리했습니다.", request);
+        } catch (error) {
+          failureHandler?.(error);
+        }
       } catch (error) {
         failureHandler?.(error);
         const message = callbackErrorMessage(error);
-        await answerTopicCallback(token, callback.id, message, request);
+        try {
+          await answerTopicCallback(token, callback.id, message, request);
+        } catch (answerError) {
+          failureHandler?.(answerError);
+        }
       }
     }
   }

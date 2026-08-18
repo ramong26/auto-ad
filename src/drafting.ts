@@ -50,18 +50,20 @@ export function validateDraft(sourceMarkdown: string, draftMarkdown: string): vo
   for (const field of ["id", "blog", "keyword"] as const) {
     if (!source[field] || draft[field] !== source[field]) throw new Error(`draft ${field} must match source`);
   }
-  for (const field of ["title", "summary", "metaDescription"] as const) {
+  for (const field of ["title", "summary"] as const) {
     if (!draft[field]?.trim()) throw new Error(`draft ${field} is required`);
   }
   if (draft.status !== "review") throw new Error("draft status must be review");
-  if (!/^## WordPress HTML\s*$/mu.test(draftMarkdown) || !/<article[\s>]/u.test(draftMarkdown)) {
-    throw new Error("WordPress HTML article is required");
-  }
+  const article = /^## 네이버 블로그 원고\s*\r?\n([\s\S]*?)(?=\r?\n## |$)/mu.exec(draftMarkdown)?.[1]?.trim();
+  if (!article) throw new Error("NAVER Blog article is required");
   const sources = [...draftMarkdown.matchAll(/https:\/\/[^\s)>"']+/gu)].map(([url]) => url);
   if (!/^## 출처\s*$/mu.test(draftMarkdown) || sources.length === 0) throw new Error("source URLs are required");
   if (!/^## (직접 확인|비교|체크리스트)\s*$/mu.test(draftMarkdown)) {
     throw new Error("direct check, comparison, or checklist is required");
   }
+  const tagSection = /^## 태그\s*\r?\n([\s\S]*?)(?=\r?\n## |$)/mu.exec(draftMarkdown)?.[1] ?? "";
+  const tags = new Set(tagSection.match(/#[\p{L}\p{N}_]+/gu) ?? []);
+  if (tags.size < 3 || tags.size > 10) throw new Error("3 to 10 NAVER Blog tags are required");
 }
 
 function moveJobToReview(db: DatabaseSync, id: number, metadata: Record<string, string>): void {

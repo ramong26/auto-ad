@@ -6,6 +6,7 @@ import {
   hasRecentKeyword,
   putTrendCache,
   recordJobFailure,
+  retryFailedDiscoveryJob,
   saveTopicDetails,
 } from "./database.ts";
 
@@ -70,12 +71,13 @@ export interface DiscoveryResult {
 }
 
 export function trendRange(runDate: string): { startDate: string; endDate: string } {
-  const end = new Date(`${runDate}T00:00:00Z`);
-  if (!Number.isFinite(end.getTime()) || end.toISOString().slice(0, 10) !== runDate) {
+  const run = new Date(`${runDate}T00:00:00Z`);
+  if (!Number.isFinite(run.getTime()) || run.toISOString().slice(0, 10) !== runDate) {
     throw new Error(`invalid run date: ${runDate}`);
   }
+  const end = new Date(run.getTime() - DAY_MS);
   const start = new Date(end.getTime() - 13 * DAY_MS);
-  return { startDate: start.toISOString().slice(0, 10), endDate: runDate };
+  return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
 }
 
 function parseTrend(keyword: string, startDate: string, endDate: string, body: TrendResponse): TrendResult {
@@ -159,7 +161,8 @@ export async function discoverCandidates(
   const candidates: TopicCandidate[] = [];
   const failures: DiscoveryResult["failures"] = [];
   for (const seed of seeds) {
-    const job = createJob(db, blog, seed.keyword, runDate);
+    let job = createJob(db, blog, seed.keyword, runDate);
+    if (job.status === "failed") job = retryFailedDiscoveryJob(db, job.id);
     if (job.status !== "candidate") {
       failures.push({ keyword: seed.keyword, reason: `job already ${job.status}` });
       continue;

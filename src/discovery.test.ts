@@ -47,7 +47,7 @@ test("Search Trend uses one 14-day response and a 24-hour cache", async () => {
   assert.equal(requestHeaders.get("x-ncp-apigw-api-key"), "key");
   assert.deepEqual(
     { startDate: requestPayload?.startDate, endDate: requestPayload?.endDate, timeUnit: requestPayload?.timeUnit },
-    { startDate: "2026-07-25", endDate: "2026-08-07", timeUnit: "date" },
+    { startDate: "2026-07-24", endDate: "2026-08-06", timeUnit: "date" },
   );
   db.close();
 });
@@ -66,6 +66,27 @@ test("429, 5xx, and empty NAVER results are rejected", async () => {
     );
     db.close();
   }
+});
+
+test("transient NAVER failure can retry without reopening policy failures", async () => {
+  const db = openDatabase(":memory:");
+  const seed: TopicSeed = { keyword: "윈도우 업데이트", conceptFit: 90, risk: "low" };
+  const failed = await discoverCandidates(
+    db, "digital-life", "2026-08-07", [seed], { keyId: "id", key: "key" },
+    (async () => { throw new Error("offline"); }) as typeof fetch,
+  );
+  assert.equal(failed.failures.length, 1);
+  const retried = await discoverCandidates(
+    db, "digital-life", "2026-08-07", [seed], { keyId: "id", key: "key" },
+    (async () => Response.json(trendBody("2026-08-07"))) as typeof fetch,
+  );
+  assert.equal(retried.candidates.length, 1);
+
+  const blocked: TopicSeed = { keyword: "고위험 투자", conceptFit: 100, risk: "high" };
+  await discoverCandidates(db, "digital-life", "2026-08-07", [blocked], { keyId: "id", key: "key" });
+  const blockedAgain = await discoverCandidates(db, "digital-life", "2026-08-07", [blocked], { keyId: "id", key: "key" });
+  assert.match(blockedAgain.failures[0]!.reason, /already failed/u);
+  db.close();
 });
 
 test("mock discovery sends 3 candidates and one owner approval creates one inbox file", async (t) => {

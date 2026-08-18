@@ -23,14 +23,16 @@ blog: "digital-life"
 keyword: "Windows PC 백업"
 title: "Windows PC 백업 확인법"
 summary: "백업 상태를 확인합니다."
-metaDescription: "Windows PC 백업 상태와 복원 준비를 확인하는 체크리스트입니다."
 ---
 
-## WordPress HTML
-<article><p><a href="https://support.microsoft.com/ko-kr/onedrive/back-up-your-folders-with-onedrive">공식 안내</a>를 확인합니다.</p></article>
+## 네이버 블로그 원고
+[공식 안내](https://support.microsoft.com/ko-kr/onedrive/back-up-your-folders-with-onedrive)를 확인하고 백업 상태를 점검합니다.
 
 ## 체크리스트
 - 파일 하나를 열어 본다.
+
+## 태그
+#윈도우 #PC백업 #원드라이브
 
 ## 출처
 - [Microsoft Support](https://support.microsoft.com/ko-kr/onedrive/back-up-your-folders-with-onedrive)
@@ -79,4 +81,18 @@ test("source shortage creates a traceable failure record", (t) => {
   assert.match(readFileSync(output, "utf8"), /공식 출처 부족/u);
   assert.match(readFileSync(inbox, "utf8"), /status: failed/u);
   assert.equal(db.prepare("SELECT status FROM jobs WHERE id = ?").get(job.id)!.status, "failed");
+});
+
+test("NAVER Blog draft requires 3 to 10 tags", (t) => {
+  const db = openDatabase(":memory:");
+  const job = createJob(db, "digital-life", "Windows PC 백업", "2026-08-07");
+  transitionJob(db, job.id, "selected");
+  transitionJob(db, job.id, "inbox");
+  const vault = mkdtempSync(join(tmpdir(), "auto-ad-tags-"));
+  t.after(() => { db.close(); rmSync(vault, { recursive: true, force: true }); });
+  mkdirSync(join(vault, "00-inbox"));
+  const inbox = join(vault, "00-inbox", "job.md");
+  writeFileSync(inbox, source(job.id));
+
+  assert.throws(() => finalizeDraft(db, vault, inbox, draft(job.id).replace("#윈도우 #PC백업 #원드라이브", "#윈도우 #백업")), /3 to 10/u);
 });

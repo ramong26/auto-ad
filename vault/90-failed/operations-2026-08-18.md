@@ -1,0 +1,23 @@
+# 운영 실패 2026-08-18
+
+- 2026-08-18T08:48:41.768Z [discovery] 스마트폰 저장공간: NAVER request failed; 윈도우 업데이트: NAVER request failed; PDF 합치기: NAVER request failed; 이메일 피싱: NAVER request failed; 사진 백업: NAVER request failed
+- 2026-08-18T08:48:41.776Z [telegram-failure-notice] fetch failed
+- 2026-08-18T08:49:13.544Z [discovery] 스마트폰 저장공간: NAVER returned no complete 14-day result; 윈도우 업데이트: NAVER returned no complete 14-day result; PDF 합치기: NAVER returned no complete 14-day result; 이메일 피싱: NAVER returned no complete 14-day result; 사진 백업: NAVER returned no complete 14-day result
+- 2026-08-18T08:49:14.867Z [telegram-failure-notice] Telegram sendMessage failed with 403
+- 2026-08-18T08:50:39.988Z [discovery] 스마트폰 저장공간: NAVER returned no complete 14-day result; 이메일 피싱: NAVER returned no complete 14-day result
+- 2026-08-18T08:50:40.974Z [telegram-failure-notice] Telegram sendMessage failed with 403
+- 2026-08-18T08:50:41.952Z [telegram-candidates] Telegram sendMessage failed with 403
+- 2026-08-18T08:50:42.389Z [telegram-failure-notice] Telegram sendMessage failed with 403
+- 2026-08-18T08:52:33.800Z [discovery] 스마트폰 저장공간: NAVER returned no complete 14-day result; 이메일 피싱: NAVER returned no complete 14-day result
+- 2026-08-18T08:52:34.769Z [telegram-failure-notice] Telegram sendMessage failed with 403: Forbidden: the bot can't send messages to the bot
+- 2026-08-18T08:52:35.756Z [telegram-candidates] Telegram sendMessage failed with 403: Forbidden: the bot can't send messages to the bot
+- 2026-08-18T08:52:36.195Z [telegram-failure-notice] Telegram sendMessage failed with 403: Forbidden: the bot can't send messages to the bot
+- 2026-08-18T11:12:36.743Z [discovery] 스마트폰 저장공간: NAVER returned no complete 14-day result; 이메일 피싱: NAVER returned no complete 14-day result
+- 2026-08-18T11:12:37.718Z [telegram-failure-notice] Telegram sendMessage failed with 403: Forbidden: the bot can't send messages to the bot
+- 2026-08-18T11:12:38.687Z [telegram-candidates] Telegram sendMessage failed with 403: Forbidden: the bot can't send messages to the bot
+- 2026-08-18T11:12:39.122Z [telegram-failure-notice] Telegram sendMessage failed with 403: Forbidden: the bot can't send messages to the bot
+- 2026-08-18T11:21:22.201Z [discovery] 스마트폰 저장공간: NAVER returned no complete 14-day result; 이메일 피싱: NAVER returned no complete 14-day result
+- 2026-08-18T12:25:07.768Z [bot-callback] fetch failed
+- 2026-08-18T12:25:23.434Z [bot-callback] Telegram answerCallbackQuery failed with 400: Bad Request: query is too old and response timeout expired or query ID is invalid
+- 2026-08-18T12:26:28.986Z [bot-callback] Telegram answerCallbackQuery failed with 400: Bad Request: query is too old and response timeout expired or query ID is invalid
+- 2026-08-18T12:26:29.451Z [bot-callback] Telegram answerCallbackQuery failed with 400: Bad Request: query is too old and response timeout expired or query ID is invalid

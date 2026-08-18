@@ -173,6 +173,19 @@ export function recordJobFailure(db: DatabaseSync, jobId: number, reason: string
   db.prepare("INSERT INTO job_failures (job_id, reason) VALUES (?, ?)").run(jobId, reason);
 }
 
+export function retryFailedDiscoveryJob(db: DatabaseSync, jobId: number): Job {
+  const job = getJob(db, jobId);
+  if (!job) throw new Error(`job ${jobId} not found`);
+  if (job.status !== "failed") return job;
+  const failure = db.prepare("SELECT reason FROM job_failures WHERE job_id = ? ORDER BY id DESC LIMIT 1")
+    .get(jobId) as unknown as { reason: string } | undefined;
+  if (!failure || !/^NAVER (request failed|rate limit exceeded|server error \d+|returned no complete 14-day result)$/u.test(failure.reason)) {
+    return job;
+  }
+  db.prepare("UPDATE jobs SET status = 'candidate' WHERE id = ? AND status = 'failed'").run(jobId);
+  return { ...job, status: "candidate" };
+}
+
 export function recordPublishAttempt(
   db: DatabaseSync,
   jobId: number,

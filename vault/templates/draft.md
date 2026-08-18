@@ -3,19 +3,17 @@ id: "원본과 동일"
 status: review
 blog: "원본과 동일"
 keyword: "원본과 동일"
-title: "WordPress 제목"
+title: "네이버 블로그 제목"
 summary: "검토용 요약"
-metaDescription: "검색 결과용 메타 설명"
 createdAt: "YYYY-MM-DDTHH:mm:ss+09:00"
 ---
 
 # 제목
 
-## WordPress HTML
+## 네이버 블로그 원고
 
-<article>
-  <p>중요 주장에는 <a href="https://공식-출처">출처 링크</a>를 연결합니다.</p>
-</article>
+결론과 준비물을 먼저 쓰고, 모바일에서 읽기 쉬운 짧은 문단과 소제목으로 작성합니다.
+중요 주장에는 [공식 출처](https://공식-출처)를 연결합니다.
 
 ## 직접 확인
 
@@ -27,6 +25,14 @@ createdAt: "YYYY-MM-DDTHH:mm:ss+09:00"
 
 - 독자가 재현할 절차 또는 선택 기준
 
+## 이미지 계획
+
+- 삽입 위치, 직접 제작할 화면, 개인정보 제거 여부
+
+## 태그
+
+#네이버블로그 #디지털생활 #문제해결
+
 ## 출처
 
 - [기관 또는 제품 공식 문서](https://공식-출처)
@@ -34,6 +40,6 @@ createdAt: "YYYY-MM-DDTHH:mm:ss+09:00"
 ## 검수
 
 - 출처 확인일: YYYY-MM-DD
-- 내부 링크 및 깨진 링크 확인: YYYY-MM-DD
-- 모바일 표시 확인: YYYY-MM-DD
-- 발행 여부: 발행하지 않음
+- 깨진 링크 확인: YYYY-MM-DD
+- 네이버 모바일 미리보기 확인: 발행 전 사용자 확인
+- 발행 여부: 자동 발행하지 않음

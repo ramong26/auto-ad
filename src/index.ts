@@ -2,14 +2,7 @@ import { readFileSync } from "node:fs";
 import { openDatabase } from "./database.ts";
 import { discoverCandidates } from "./discovery.ts";
 import { failDraft, finalizeDraft, frontMatter, recordOperationalFailure } from "./drafting.ts";
-import {
-  handlePublicationCallback,
-  sendDraftReview,
-  stageWordPressDraft,
-  verifyWordPressSetup,
-  type WordPressConfig,
-} from "./publishing.ts";
-import { pollTopicCallbacks, sendCandidateBriefing, sendFailureNotice } from "./topic-flow.ts";
+import { findTelegramOwnerId, pollTopicCallbacks, sendCandidateBriefing, sendDraftReviewNotice, sendFailureNotice } from "./topic-flow.ts";
 
 const db = openDatabase();
 const command = process.argv[2];
@@ -34,13 +27,20 @@ async function notifyFailure(scope: string, error: unknown): Promise<void> {
   }
 }
 
-function wordpressConfig(): WordPressConfig {
-  return {
-    baseUrl: process.env.WP_DIGITAL_URL ?? "",
-    username: process.env.WP_DIGITAL_USERNAME ?? "",
-    applicationPassword: process.env.WP_DIGITAL_APP_PASSWORD ?? "",
-    categoryId: Number(process.env.WP_DIGITAL_CATEGORY_ID ?? "0"),
-  };
+async function notifyDraft(draftPath: string): Promise<number> {
+  const metadata = frontMatter(readFileSync(draftPath, "utf8"));
+  try {
+    return await sendDraftReviewNotice(
+      process.env.TELEGRAM_BOT_TOKEN ?? "",
+      process.env.TELEGRAM_OWNER_ID ?? "",
+      draftPath,
+      metadata.title ?? "",
+      metadata.summary ?? "",
+    );
+  } catch (error) {
+    recordFailure("draft-review-notice", error);
+    throw error;
+  }
 }
 
 if (command === "discover") {
@@ -81,47 +81,22 @@ if (command === "discover") {
     process.env.TELEGRAM_OWNER_ID ?? "",
     vaultPath,
     fetch,
-    (callback) => handlePublicationCallback(
-      db,
-      callback,
-      process.env.TELEGRAM_OWNER_ID ?? "",
-      vaultPath,
-      wordpressConfig(),
-    ),
     (error) => recordFailure("bot-callback", error),
   );
-} else if (command === "review") {
-  const draftPath = process.argv[3];
-  if (!draftPath) throw new Error("draft path is required");
-  const markdown = readFileSync(draftPath, "utf8");
-  const metadata = frontMatter(markdown);
-  const match = /-(\d+)$/u.exec(metadata.id ?? "");
-  if (!match) throw new Error("draft id must end with the numeric job ID");
-  let messageId: number;
-  try {
-    const publication = await stageWordPressDraft(db, Number(match[1]), markdown, wordpressConfig());
-    messageId = await sendDraftReview(
-      process.env.TELEGRAM_BOT_TOKEN ?? "",
-      process.env.TELEGRAM_OWNER_ID ?? "",
-      Number(match[1]),
-      metadata.title ?? "",
-      publication.wordpress_url ?? "",
-      publication.review_token ?? "",
-    );
-  } catch (error) {
-    await notifyFailure("draft-review", error);
-    throw error;
-  }
-  console.log(`sent review message: ${messageId}`);
-  db.close();
-} else if (command === "wordpress-verify") {
-  const result = await verifyWordPressSetup(wordpressConfig());
-  console.log(`WordPress ready: ${result.user} / ${result.category}`);
+} else if (command === "telegram-whoami") {
+  console.log(`TELEGRAM_OWNER_ID=${await findTelegramOwnerId(process.env.TELEGRAM_BOT_TOKEN ?? "")}`);
   db.close();
 } else if (command === "draft-finalize") {
   const [inboxPath, preparedDraftPath] = process.argv.slice(3);
   if (!inboxPath || !preparedDraftPath) throw new Error("inbox path and prepared draft path are required");
-  console.log(finalizeDraft(db, vaultPath, inboxPath, readFileSync(preparedDraftPath, "utf8")));
+  const outputPath = finalizeDraft(db, vaultPath, inboxPath, readFileSync(preparedDraftPath, "utf8"));
+  console.log(outputPath);
+  console.log(`sent draft review message: ${await notifyDraft(outputPath)}`);
+  db.close();
+} else if (command === "draft-notify") {
+  const draftPath = process.argv[3];
+  if (!draftPath) throw new Error("draft path is required");
+  console.log(`sent draft review message: ${await notifyDraft(draftPath)}`);
   db.close();
 } else if (command === "draft-fail") {
   const [inboxPath, ...reasonParts] = process.argv.slice(3);
